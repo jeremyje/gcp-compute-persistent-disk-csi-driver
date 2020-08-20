@@ -20,10 +20,13 @@ ifdef GCE_PD_CSI_STAGING_VERSION
 else
 	STAGINGVERSION=${REV}
 endif
+WINDOWS_VERSIONS=ltsc2019 2004 1909
 STAGINGIMAGE=${GCE_PD_CSI_STAGING_IMAGE}
 DRIVERBINARY=gce-pd-csi-driver
 DRIVERWINDOWSBINARY=${DRIVERBINARY}.exe
 
+ok:
+	echo $(foreach wver, $(WINDOWS_VERSIONS), build-and-push-windows-container-$(wver))
 all: gce-pd-driver gce-pd-driver-windows
 gce-pd-driver:
 	mkdir -p bin
@@ -33,27 +36,30 @@ gce-pd-driver-windows:
 	mkdir -p bin
 	GOOS=windows go build -mod=vendor -ldflags -X=main.vendorVersion=$(STAGINGVERSION) -o bin/${DRIVERWINDOWSBINARY} ./cmd/
 
-build-container:
-ifndef GCE_PD_CSI_STAGING_IMAGE
-	$(error "Must set environment variable GCE_PD_CSI_STAGING_IMAGE to staging image repository")
-endif
+build-container: require-GCE_PD_CSI_STAGING_IMAGE
 	docker build --build-arg TAG=$(STAGINGVERSION) -t $(STAGINGIMAGE):$(STAGINGVERSION) .
 
-build-and-push-windows-container-ltsc2019:
-ifndef GCE_PD_CSI_STAGING_IMAGE
-	$(error "Must set environment variable GCE_PD_CSI_STAGING_IMAGE to staging image repository")
-endif
-	@sh init-buildx.sh; \
-	DOCKER_CLI_EXPERIMENTAL=enabled docker buildx build --file=Dockerfile.Windows --platform=windows \
-	-t $(STAGINGIMAGE):$(STAGINGVERSION) --build-arg BASE_IMAGE=servercore --build-arg BASE_IMAGE_TAG=ltsc2019 --build-arg STAGINGVERSION=$(STAGINGVERSION) --push .
+build-and-push-windows-containers: $(foreach ver, $(WINDOWS_VERSIONS), build-and-push-windows-container-$(ver))
 
-build-and-push-windows-container-1909:
+build-and-push-windows-container-%: require-GCE_PD_CSI_STAGING_IMAGE init-buildx
+	DOCKER_CLI_EXPERIMENTAL=enabled docker buildx build \
+	  --file=Dockerfile.Windows --platform=windows \
+  	-t $(STAGINGIMAGE):$(STAGINGVERSION) --build-arg BASE_IMAGE=servercore \
+	  --build-arg BASE_IMAGE_TAG=$* --build-arg STAGINGVERSION=$(STAGINGVERSION) \
+		--push .
+
+init-buildx:
+	# Ensure we use a builder that can leverage it (the default on linux will not)
+	-DOCKER_CLI_EXPERIMENTAL=enabled docker buildx rm windows-builder
+	DOCKER_CLI_EXPERIMENTAL=enabled docker buildx create --use --name=windows-builder
+	# Register gcloud as a Docker credential helper.
+	# Required for "docker buildx build --push".
+	gcloud auth configure-docker --quiet
+
+require-GCE_PD_CSI_STAGING_IMAGE:
 ifndef GCE_PD_CSI_STAGING_IMAGE
 	$(error "Must set environment variable GCE_PD_CSI_STAGING_IMAGE to staging image repository")
 endif
-	@sh init-buildx.sh; \
-	DOCKER_CLI_EXPERIMENTAL=enabled docker buildx build --file=Dockerfile.Windows --platform=windows \
-	-t $(STAGINGIMAGE):$(STAGINGVERSION) --build-arg BASE_IMAGE=servercore --build-arg BASE_IMAGE_TAG=1909 --build-arg STAGINGVERSION=$(STAGINGVERSION) --push .
 
 push-container: build-container
 	gcloud docker -- push $(STAGINGIMAGE):$(STAGINGVERSION)

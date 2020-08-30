@@ -61,7 +61,7 @@ func GCEClientAndDriverSetup(instance *remote.InstanceInfo) (*remote.TestContext
 		Port:         port,
 	}
 
-	err := os.Setenv("GCE_PD_CSI_STAGING_VERSION", "latest")
+	err := os.Setenv("REV", "latest")
 	if err != nil {
 		return nil, err
 	}

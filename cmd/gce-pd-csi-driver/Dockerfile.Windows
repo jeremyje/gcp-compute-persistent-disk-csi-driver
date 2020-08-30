@@ -21,7 +21,7 @@ ARG BUILDPLATFORM
 ARG STAGINGVERSION
 WORKDIR /code
 ADD . /code/
-RUN cd /code/ && GOARCH=$(echo $TARGETPLATFORM | cut -f2 -d '/') GCE_PD_CSI_STAGING_VERSION=${STAGINGVERSION} make gce-pd-driver-windows
+RUN cd /code/ && GOARCH=$(echo $TARGETPLATFORM | cut -f2 -d '/') REV=${STAGINGVERSION} make gce-pd-driver-windows
 
 FROM mcr.microsoft.com/windows/${BASE_IMAGE}:${BASE_IMAGE_TAG}
 LABEL description="PD CSI driver"

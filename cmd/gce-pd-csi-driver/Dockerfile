@@ -15,7 +15,7 @@
 FROM golang:1.13.4 as builder
 WORKDIR /go/src/sigs.k8s.io/gcp-compute-persistent-disk-csi-driver
 ADD . .
-RUN make
+RUN make all
 
 # MAD HACKS: Build a version first so we can take the scsi_id bin and put it somewhere else in our real build
 FROM k8s.gcr.io/build-image/debian-base-amd64:v2.1.3 as base

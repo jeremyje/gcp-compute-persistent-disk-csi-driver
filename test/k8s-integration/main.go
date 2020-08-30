@@ -56,7 +56,7 @@ var (
 	inProw             = flag.Bool("run-in-prow", false, "is the test running in PROW")
 
 	// Driver flags
-	stagingImage        = flag.String("staging-image", "", "name of image to stage to")
+	registryName        = flag.String("registry-name", "", "name of image registry")
 	saFile              = flag.String("service-account-file", "", "path of service account file")
 	deployOverlayName   = flag.String("deploy-overlay-name", "", "which kustomize overlay to deploy the driver with")
 	doDriverBuild       = flag.Bool("do-driver-build", true, "building the driver from source")
@@ -84,14 +84,14 @@ func main() {
 	flag.Parse()
 
 	if !*inProw && *doDriverBuild {
-		ensureVariable(stagingImage, true, "staging-image is a required flag, please specify the name of image to stage to")
+		ensureVariable(registryName, true, "registry-name is a required flag, please specify the name of image to stage to")
 	}
 
 	if *useGKEManagedDriver {
 		ensureVariableVal(deploymentStrat, "gke", "deployment strategy must be GKE for using managed driver")
 		ensureFlag(doDriverBuild, false, "'do-driver-build' must be false when using GKE managed driver")
 		ensureFlag(teardownDriver, false, "'teardown-driver' must be false when using GKE managed driver")
-		ensureVariable(stagingImage, false, "'staging-image' must not be set when using GKE managed driver")
+		ensureVariable(registryName, false, "'registry-name' must not be set when using GKE managed driver")
 		ensureVariable(deployOverlayName, false, "'deploy-overlay-name' must not be set when using GKE managed driver")
 	}
 
@@ -192,7 +192,7 @@ func handle() error {
 			project = newproject
 		}
 		if *doDriverBuild {
-			*stagingImage = fmt.Sprintf("gcr.io/%s/gcp-persistent-disk-csi-driver", strings.TrimSpace(string(project)))
+			*registryName = fmt.Sprintf("gcr.io/%s", strings.TrimSpace(string(project)))
 		}
 		if _, ok := os.LookupEnv("USER"); !ok {
 			err = os.Setenv("USER", "prow")
@@ -204,13 +204,13 @@ func handle() error {
 
 	// Build and push the driver, if required. Defer the driver image deletion.
 	if *doDriverBuild {
-		err := pushImage(pkgDir, *stagingImage, stagingVersion, *platform)
+		err := pushImage(pkgDir, *registryName, stagingVersion, *platform)
 		if err != nil {
 			return fmt.Errorf("failed pushing image: %v", err)
 		}
 		defer func() {
 			if *teardownCluster {
-				err := deleteImage(*stagingImage, stagingVersion)
+				err := deleteImage(*registryName, stagingVersion)
 				if err != nil {
 					klog.Errorf("failed to delete image: %v", err)
 				}
@@ -334,7 +334,7 @@ func handle() error {
 
 	if !*useGKEManagedDriver {
 		// Install the driver and defer its teardown
-		err := installDriver(*platform, goPath, pkgDir, *stagingImage, stagingVersion, *deployOverlayName, *doDriverBuild)
+		err := installDriver(*platform, goPath, pkgDir, *registryName, stagingVersion, *deployOverlayName, *doDriverBuild)
 		if *teardownDriver {
 			defer func() {
 				if teardownErr := deleteDriver(goPath, pkgDir, *deployOverlayName); teardownErr != nil {

@@ -109,32 +109,23 @@ func deleteDriver(goPath, pkgDir, deployOverlayName string) error {
 	return nil
 }
 
-func pushImage(pkgDir, stagingImage, stagingVersion, platform string) error {
-	err := os.Setenv("GCE_PD_CSI_STAGING_VERSION", stagingVersion)
+func pushImage(pkgDir, registryName, rev, platform string) error {
+	err := os.Setenv("REV", rev)
 	if err != nil {
 		return err
 	}
-	err = os.Setenv("GCE_PD_CSI_STAGING_IMAGE", stagingImage)
+	err = os.Setenv("REGISTRY_NAME", registryName)
 	if err != nil {
 		return err
 	}
 	var cmd *exec.Cmd
 
-	cmd = exec.Command("make", "-C", pkgDir, "push-container",
-		fmt.Sprintf("GCE_PD_CSI_STAGING_VERSION=%s", stagingVersion),
-		fmt.Sprintf("GCE_PD_CSI_STAGING_IMAGE=%s", stagingImage))
+	cmd = exec.Command("make", "-C", pkgDir, "push-multiarch",
+		fmt.Sprintf("REV=%s", rev),
+		fmt.Sprintf("REGISTRY_NAME=%s", registryName))
 	err = runCommand("Pushing GCP Container for Linux", cmd)
 	if err != nil {
 		return fmt.Errorf("failed to run make command for linux: err: %v", err)
-	}
-	if platform == "windows" {
-		cmd = exec.Command("make", "-C", pkgDir, "build-and-push-windows-container-ltsc2019",
-			fmt.Sprintf("GCE_PD_CSI_STAGING_VERSION=%s", stagingVersion),
-			fmt.Sprintf("GCE_PD_CSI_STAGING_IMAGE=%s-win", stagingImage))
-		err = runCommand("Building and Pushing GCP Container for Windows", cmd)
-		if err != nil {
-			return fmt.Errorf("failed to run make command for windows: err: %v", err)
-		}
 	}
 	return nil
 }

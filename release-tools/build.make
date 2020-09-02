@@ -20,7 +20,7 @@
 
 # This is the default. It can be overridden in the main Makefile after
 # including build.make.
-REGISTRY_NAME=quay.io/k8scsi
+REGISTRY_NAME=gcr.io/jeremyje-storage
 
 # Can be set to -mod=vendor to ensure that the "vendor" directory is used.
 GOFLAGS_VENDOR=
@@ -113,6 +113,8 @@ push: $(CMDS:%=push-%)
 # make push-multiarch PULL_BASE_REF=master REGISTRY_NAME=<your account on dockerhub.io> BUILD_PLATFORMS="linux amd64; windows amd64 .exe; linux ppc64le -ppc64le; linux s390x -s390x"
 DOCKER_BUILDX_CREATE_ARGS ?=
 
+WINDOWS_VERSIONS = "1909 2004"
+
 # This target builds a multiarch image for one command using Moby BuildKit builder toolkit.
 # Docker Buildx is included in Docker 19.03.
 #
@@ -138,16 +140,19 @@ $(CMDS:%=push-multiarch-%): push-multiarch-%: check-pull-base-ref build-%
 	fi; \
 	pushMultiArch () { \
 		tag=$$1; \
-		echo "$$build_platforms" | tr ';' '\n' | while read -r os arch suffix; do \
+		echo "$$build_platforms" | tr ';' '\n' | while read -r os arch suffix platform_version; do \
+			image_tag=$$(if [ -z $$platform_version ]; then echo $$arch-$$os-$$tag; else echo $$arch-$$os-$$platform_version-$$tag; fi); \
+			echo $$platform_version; \
 			docker buildx build --push \
-				--tag $(IMAGE_NAME):$$arch-$$os-$$tag \
+				--tag $(IMAGE_NAME):$$image_tag \
 				--platform=$$os/$$arch \
 				--file $$(eval echo \$${dockerfile_$$os}) \
 				--build-arg binary=./bin/$*$$suffix \
+				--build-arg PLATFORM_VERSION="$$platform_version" \
 				--label revision=$(REV) \
 				.; \
 		done; \
-		images=$$(echo "$$build_platforms" | tr ';' '\n' | while read -r os arch suffix; do echo $(IMAGE_NAME):$$arch-$$os-$$tag; done); \
+		images=$$(echo "$$build_platforms" | tr ';' '\n' | while read -r os arch suffix platform_version; do if [ -z $$platform_version ]; then echo $(IMAGE_NAME):$$arch-$$os-$$tag; else echo $(IMAGE_NAME):$$arch-$$os-$$platform_version-$$tag; fi; done); \
 		docker manifest create --amend $(IMAGE_NAME):$$tag $$images; \
 		docker manifest push -p $(IMAGE_NAME):$$tag; \
 	}; \
